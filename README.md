@@ -77,6 +77,12 @@ and
 - Samsung TV certificate profile for installing on physical hardware
 - A Samsung Tizen TV with developer mode enabled, or the Tizen TV emulator
 
+To enable developer mode on the TV: open the Apps screen, select any app that
+isn't installed, then enter `12345` on the remote and confirm. On newer
+remotes with a dedicated `123` button, press that first, then enter
+`1-2-3-4-5`. Toggle Developer Mode on, enter your PC's IP address when
+prompted, and restart the TV.
+
 The application manifest currently targets Tizen 6.0 or newer.
 
 As an alternative to Tizen Studio, [apps2samsung.com](https://apps2samsung.com/)
