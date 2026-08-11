@@ -1,6 +1,6 @@
 {
   "name": "beam-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Beam Companion Server — shares folders on your network for the Beam TV app to discover, browse, and play.",
   "homepage": "https://github.com/TAGISWILD/beam-tv",
   "repository": {
