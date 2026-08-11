@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
-    id="https://github.com/beam/beam-tv" version="1.0.0" viewmodes="maximized">
+    id="https://github.com/beam/beam-tv" version="1.0.1" viewmodes="maximized">
     <tizen:application id="b41x9K7qTn.Beam" package="b41x9K7qTn" required_version="6.0"/>
     <content src="tv.html"/>
     <access origin="*" subdomains="true"/>

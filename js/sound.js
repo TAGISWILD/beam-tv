@@ -19,6 +19,10 @@
   }
 
   function tone({ freq, duration, gain, type, glideTo }) {
+    // Muted at the source rather than at each of the dozen call sites in
+    // app.js and nav.js. Checked here so nothing has to remember to ask, and
+    // so a disabled setting also avoids constructing an AudioContext at all.
+    if (global.BeamSound && global.BeamSound.muted) return;
     const c = ensureCtx();
     if (!c) return;
     const osc = c.createOscillator();
@@ -37,6 +41,9 @@
   }
 
   global.BeamSound = {
+    // Set from the Settings screen's "Navigation sounds" toggle (see
+    // applyPrefs in app.js). The boot laser deliberately respects it too.
+    muted: false,
     move()   { tone({ freq: 1180, duration: 0.035, gain: 0.05, type: 'sine' }); },
     select() { tone({ freq: 720,  duration: 0.06,  gain: 0.09, type: 'sine', glideTo: 1180 }); },
     back()   { tone({ freq: 520,  duration: 0.07,  gain: 0.08, type: 'sine', glideTo: 260 }); },

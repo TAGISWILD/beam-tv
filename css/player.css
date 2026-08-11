@@ -47,11 +47,15 @@
 
 #player-bottom { display: flex; align-items: center; gap: 22px; }
 
+/* backdrop-filter removed here and on #pip-badge below — see the note on
+   .card .thumb .play-badge in layout.css. This one sits over decoding video,
+   which is the worst possible backdrop to ask a TV to re-blur every frame:
+   the source is changing 24-60 times a second, so the blur can never be
+   cached and is recomputed continuously for the entire duration of playback. */
 #player-playicon {
   width: 56px; height: 56px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.14);
-  backdrop-filter: blur(10px);
+  background: rgba(255,255,255,0.18);
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
@@ -76,7 +80,7 @@
 
 #player-time {
   font-variant-numeric: tabular-nums;
-  font-size: 18px;
+  font-size: 20px;
   color: var(--ink-2);
   min-width: 130px;
   text-align: right;
@@ -85,14 +89,16 @@
 #player-hint {
   position: absolute;
   bottom: 16px; right: var(--safe);
-  font-size: 14px;
+  font-size: 17px;
   color: var(--ink-3);
 }
 
 /* Browser-default WebVTT cue styling is sized for close-up desktop viewing —
-   far too small to read from a couch. Bump size/contrast for TV distance. */
+   far too small to read from a couch. Bump size/contrast for TV distance.
+   Driven by --cue-size so the Settings screen can change it live: a viewer who
+   needs larger subtitles shouldn't have to restart playback to get them. */
 #player-video::cue {
-  font-size: 34px;
+  font-size: var(--cue-size, 34px);
   font-family: inherit;
   font-weight: 600;
   color: #fff;
@@ -109,13 +115,17 @@
  * opacity:0/pointer-events:none — this screen is deliberately NOT given
  * .active while in this mode (the screen behind it has that instead). */
 #screen-player.pip {
+  /* display:block is load-bearing now that .screen defaults to display:none:
+     this screen is deliberately never given .active while in PiP (the screen
+     behind it holds that instead), so it has nothing else to take it out of
+     display:none. Previously the base rule was opacity:0, which this
+     overrode with opacity:1 — the element was in the render tree either way. */
+  display: block;
   inset: auto 32px 32px auto;
   width: var(--pip-w);
   height: var(--pip-h);
   border-radius: var(--radius-m);
   overflow: hidden;
-  opacity: 1;
-  transform: none;
   pointer-events: none;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--hairline);
   z-index: 60;
@@ -134,11 +144,10 @@
 #pip-badge {
   position: absolute;
   left: 10px; bottom: 10px;
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--ink-1);
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 0.78);
   padding: 5px 10px;
   border-radius: 999px;
   display: none;
@@ -180,11 +189,11 @@
   padding: 16px 0 40px;
 }
 #photo-title { font-size: 26px; font-weight: 800; }
-#photo-counter { font-size: 16px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+#photo-counter { font-size: 19px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 
 #photo-hint {
   position: absolute;
   bottom: 16px; right: var(--safe);
-  font-size: 14px;
+  font-size: 17px;
   color: var(--ink-3);
 }
