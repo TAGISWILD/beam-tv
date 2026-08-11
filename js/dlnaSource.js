@@ -93,11 +93,20 @@
       id: c.getAttribute('id'),
       name: (c.getElementsByTagName('dc:title')[0] || c.getElementsByTagName('title')[0] || {}).textContent || 'Folder',
     }));
-    const items = Array.from(didl.getElementsByTagName('item')).map((it) => {
-      const res = it.getElementsByTagName('res')[0];
+    // Subtitle mimetypes, both as a lone sidecar item (some servers expose
+    // "Movie.srt" as its own <item>, mirroring a filesystem) and as a second
+    // <res> on the same <item> as the video (Plex/Serviio commonly do this
+    // instead). Either shape is handled below.
+    const SUB_MIME = /srt|subrip|vtt|smi|sami|ssa|ass/i;
+    const allItems = Array.from(didl.getElementsByTagName('item')).map((it) => {
+      const resList = Array.from(it.getElementsByTagName('res'));
+      const isSub = (r) => SUB_MIME.test(r.getAttribute('protocolInfo') || '');
+      const primaryRes = resList.find((r) => !isSub(r)) || resList[0];
+      const subRes = resList.find((r) => r !== primaryRes && isSub(r));
       const title = (it.getElementsByTagName('dc:title')[0] || it.getElementsByTagName('title')[0] || {}).textContent || 'Untitled';
-      const protocolInfo = (res && res.getAttribute('protocolInfo')) || '';
-      const kind = /image/i.test(protocolInfo) ? 'image' : /audio/i.test(protocolInfo) ? 'audio' : 'video';
+      const protocolInfo = (primaryRes && primaryRes.getAttribute('protocolInfo')) || '';
+      const kind = resList.length === 1 && isSub(primaryRes) ? 'subtitle'
+        : /image/i.test(protocolInfo) ? 'image' : /audio/i.test(protocolInfo) ? 'audio' : 'video';
       // Servers (Plex, Serviio, etc.) commonly expose a small pre-made
       // thumbnail here — far cheaper and more reliable than frame-grabbing a
       // remote video, which usually fails anyway (no CORS on a LAN server).
@@ -107,12 +116,15 @@
         kind,
         id: it.getAttribute('id'),
         name: title,
-        uri: res ? res.textContent : null,
-        size: res ? Number(res.getAttribute('size')) : undefined,
+        uri: primaryRes ? primaryRes.textContent : null,
+        size: primaryRes ? Number(primaryRes.getAttribute('size')) : undefined,
         thumbUri: artEl ? artEl.textContent : null,
+        embeddedSubtitleUri: subRes ? subRes.textContent : undefined,
       };
     });
-    return { items: containers.concat(items) };
+    const subtitles = allItems.filter((it) => it.kind === 'subtitle');
+    const items = allItems.filter((it) => it.kind !== 'subtitle');
+    return { items: containers.concat(items), subtitles };
   }
 
   const mockDlnaTree = {
@@ -220,7 +232,7 @@
         const items = []
           .concat((node.children || []).map((cid) => ({ isDir: true, kind: 'dir', id: cid, name: mockDlnaTree[cid].name })))
           .concat((node.files || []).map((f, i) => ({ isDir: false, kind: 'video', id: objectId + '_' + i, name: f, uri: '#mock-video' })));
-        setTimeout(() => resolve({ items }), 200);
+        setTimeout(() => resolve({ items, subtitles: [] }), 200);
       });
     }
     return browse(server.controlUrl, objectId || '0');

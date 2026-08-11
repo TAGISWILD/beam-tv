@@ -17,8 +17,6 @@
 </head>
 <body>
   <div id="stage">
-    <div class="noise"></div>
-
     <div id="splash">
       <div class="splash-beam"></div>
       <div class="splash-logo"></div>
@@ -30,16 +28,18 @@
       <div class="nav-spacer"></div>
     </nav>
 
+    <!-- Every screen is just an empty .content shell now. The static page
+         title/subtitle that used to sit above the USB and Home content are
+         gone: the hero panel each screen renders carries the identity of
+         what's on screen far better than a fixed "USB" heading did, and the
+         ~110px the heading block occupied is exactly what the grid needed to
+         fit a second row of cards instead of leaving the space blank. -->
     <main id="main">
       <section id="screen-home" class="screen active">
-        <h1 class="page-title">Beam</h1>
-        <p class="page-subtitle">Your movies, shows &amp; music — from USB and the network.</p>
         <div class="content"></div>
       </section>
 
       <section id="screen-usb" class="screen">
-        <h1 class="page-title">USB</h1>
-        <p class="page-subtitle" id="usb-subtitle">Media on connected USB storage.</p>
         <div class="content"></div>
       </section>
 
@@ -78,7 +78,7 @@
           <div id="player-progress"><div id="player-progress-fill"></div></div>
           <div id="player-time">0:00 / 0:00</div>
         </div>
-        <div id="player-hint">◀ ▶ seek 10s &nbsp;·&nbsp; OK play/pause &nbsp;·&nbsp; double-press for picture-in-picture &nbsp;·&nbsp; Back exit</div>
+        <div id="player-hint">◀ ▶ seek 10s &nbsp;·&nbsp; OK play/pause &nbsp;·&nbsp; double-press for picture-in-picture &nbsp;·&nbsp; Blue toggle subtitles &nbsp;·&nbsp; Back exit</div>
       </div>
       <div id="pip-badge">▶ Double-press play/pause to expand</div>
     </section>
@@ -101,7 +101,9 @@
   <script src="js/scale.js"></script>
   <script src="js/sound.js"></script>
   <script src="js/nav.js"></script>
+  <script src="js/metadata.js"></script>
   <script src="js/usbSource.js"></script>
+  <script src="js/library.js"></script>
   <script src="js/dlnaSource.js"></script>
   <script src="js/thumbs.js"></script>
   <script src="js/player.js"></script>

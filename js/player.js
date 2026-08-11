@@ -32,6 +32,42 @@
     return out.join('\n');
   }
 
+  function isAssOrSsa(text) {
+    return /^﻿?\[Script Info\]/im.test(text) || /^\s*Dialogue:/im.test(text);
+  }
+
+  // ASS/SSA -> WebVTT: styling, positioning and karaoke tags are dropped
+  // rather than translated — the goal is readable captions, not a full
+  // renderer. Only the [Events] Dialogue lines and their timing survive.
+  function assToVtt(assText) {
+    const lines = assText.replace(/\r/g, '').split('\n');
+    const out = ['WEBVTT', ''];
+    // Dialogue format is comma-separated with a fixed field order; Text is
+    // always the last field but may itself contain commas, so it's split
+    // with a limit rather than naively on every comma.
+    const fieldsRe = /^Dialogue:\s*(?:[^,]*,){9}(.*)$/;
+    const timeRe = /^Dialogue:\s*[^,]*,\s*(\d+:\d{2}:\d{2}\.\d{2}),\s*(\d+:\d{2}:\d{2}\.\d{2}),/;
+    const toVttTime = (t) => {
+      // ASS uses H:MM:SS.cc (centiseconds); VTT needs HH:MM:SS.mmm.
+      const m = /^(\d+):(\d{2}):(\d{2})\.(\d{2})$/.exec(t);
+      if (!m) return '00:00:00.000';
+      const h = String(m[1]).padStart(2, '0');
+      return `${h}:${m[2]}:${m[3]}.${m[4]}0`;
+    };
+    for (const line of lines) {
+      const timeMatch = timeRe.exec(line);
+      const fieldsMatch = fieldsRe.exec(line);
+      if (!timeMatch || !fieldsMatch) continue;
+      const text = fieldsMatch[1]
+        .replace(/\{[^}]*\}/g, '')   // override tags, e.g. {\an8}
+        .replace(/\\N|\\n/g, '\n')   // ASS line breaks
+        .trim();
+      if (!text) continue;
+      out.push(`${toVttTime(timeMatch[1])} --> ${toVttTime(timeMatch[2])}`, text, '');
+    }
+    return out.join('\n');
+  }
+
   class Player {
     constructor(videoEl) {
       this.video = videoEl;
@@ -116,7 +152,7 @@
       if (subtitleUri) {
         try {
           const text = await (await fetch(subtitleUri)).text();
-          const vtt = /^\s*WEBVTT/i.test(text) ? text : srtToVtt(text);
+          const vtt = /^\s*WEBVTT/i.test(text) ? text : isAssOrSsa(text) ? assToVtt(text) : srtToVtt(text);
           const blob = new Blob([vtt], { type: 'text/vtt' });
           this._trackUrl = URL.createObjectURL(blob);
           const track = document.createElement('track');
@@ -124,6 +160,12 @@
           track.label = 'Subtitles';
           track.default = true;
           track.src = this._trackUrl;
+          // `default` alone is not reliably honored by every WebKit build
+          // (some Tizen firmwares need `.track.mode` set explicitly, and only
+          // after the track has actually loaded its cues) — so it's forced
+          // on both immediately and again on 'load' to cover either case.
+          track.track.mode = 'showing';
+          track.addEventListener('load', () => { track.track.mode = 'showing'; });
           this.video.appendChild(track);
         } catch (e) { console.warn('subtitle load failed', e); }
       }
@@ -145,6 +187,18 @@
 
     togglePlay() { this.video.paused ? this.video.play() : this.video.pause(); }
     seekBy(sec) { this.video.currentTime = Math.max(0, Math.min(this.video.duration || Infinity, this.video.currentTime + sec)); }
+
+    hasSubtitles() { return !!this.video.querySelector('track'); }
+
+    // Returns the new state ('showing' | 'hidden') so the caller can toast
+    // it, or null when there's no subtitle track loaded for this file at all
+    // — distinct from "hidden", since the UI needs to tell those apart.
+    toggleSubtitles() {
+      const track = this.video.querySelector('track');
+      if (!track) return null;
+      track.track.mode = track.track.mode === 'showing' ? 'hidden' : 'showing';
+      return track.track.mode;
+    }
   }
 
   global.BeamPlayer = Player;

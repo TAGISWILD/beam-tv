@@ -22,6 +22,20 @@
       document.addEventListener('keydown', (e) => this._handleKey(e), true);
     }
 
+    // _candidates() runs getComputedStyle() over every focusable on the screen,
+    // and each of those forces the engine to flush pending style invalidation —
+    // which setFocus() guarantees is pending, because it just added/removed a
+    // class. So every keypress paid a full style recalc across the whole grid,
+    // twice (move() calls _bestCandidate for the same-region set and possibly
+    // again for all). Measured at ~1.4ms per move for 61 cards on desktop; on
+    // TV silicon that's the difference between "instant" and "noticeable".
+    //
+    // The list only changes when a screen re-renders, so it's cached and
+    // invalidated explicitly. Deliberately NOT a MutationObserver: every
+    // setFocus() mutates a class attribute, so an observer would invalidate
+    // the cache on the very action it exists to make cheap.
+    invalidate() { this._cache = null; }
+
     _scopeRoot() {
       const overlay = document.querySelector('[data-nav-scope]:not(.hidden)');
       if (overlay) return overlay;
@@ -30,11 +44,27 @@
 
     _candidates() {
       const root = this._scopeRoot();
+      // Keyed on the scope root as well as existence: a cache built for the USB
+      // screen must not be reused the moment an overlay or another screen
+      // becomes the scope, even if nothing re-rendered.
+      if (!this._cache || this._cache.root !== root) {
+        this._cache = { root, nodes: this._collectCandidates(root) };
+      }
+      // isConnected is a plain property read — unlike offsetParent and
+      // getComputedStyle below it flushes neither style nor layout — so
+      // re-checking it on every call costs essentially nothing, and it makes a
+      // stale cache (some future render path forgetting to invalidate) degrade
+      // into "doesn't see new items yet" rather than "navigates into detached
+      // nodes whose geometry is all zeros", which would send focus to a corner.
+      return this._cache.nodes.filter((el) => el.isConnected);
+    }
+
+    _collectCandidates(root) {
       // The sidebar lives outside every .screen, so without this Left-arrow
       // could never reach it once focus moved into a screen's content — it
       // was structurally unreachable via the remote. It naturally drops out
-      // of the list below (visibility:hidden) while a chromeless screen
-      // (player/photo) hides it.
+      // of the list below (offsetParent goes null) while a chromeless screen
+      // (player/photo) hides it with display:none.
       const sidebar = document.getElementById('sidebar');
       const nodes = Array.from(root.querySelectorAll('.focusable'));
       if (sidebar && root !== sidebar && !root.contains(sidebar)) {
@@ -48,6 +78,10 @@
     }
 
     focusFirst(container) {
+      // Every render path ends here, which makes this the one reliable place to
+      // drop the candidate cache — the DOM it was built from has just been
+      // replaced wholesale by whatever render is calling us.
+      this.invalidate();
       const root = container || this._scopeRoot();
       const el = root.querySelector('.focusable[data-autofocus]') || root.querySelector('.focusable');
       if (el) this.setFocus(el);
@@ -58,7 +92,16 @@
       if (this.current) this.current.classList.remove('focused');
       this.current = el;
       el.classList.add('focused');
-      if (typeof el.scrollIntoViewIfNeeded === 'function') {
+      // Bringing focus into view is delegated rather than done with
+      // scrollIntoView. The app moves its rows and grids with transforms on a
+      // rail (see BeamRails in app.js) because a transform is compositable and
+      // a scroll offset is not — and the two actively fight: scrollIntoView
+      // would scroll the whole screen, hero included, to chase an element the
+      // rail was already about to slide into place. Falls back to the native
+      // behaviour when no reveal handler is installed.
+      if (this.onReveal) {
+        this.onReveal(el);
+      } else if (typeof el.scrollIntoViewIfNeeded === 'function') {
         el.scrollIntoViewIfNeeded({ block: 'nearest' });
       } else {
         el.scrollIntoView({ block: 'nearest', inline: 'nearest' });

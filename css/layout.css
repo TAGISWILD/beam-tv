@@ -50,19 +50,25 @@
     color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
 #sidebar.collapsed .nav-item { justify-content: center; gap: 0; padding: 13px 0; }
-.nav-item svg { width: 20px; height: 20px; stroke: currentColor; flex-shrink: 0; }
+/* 26px, not 20px. These are the app's only wayfinding when the rail is
+   collapsed — at 20px on a 1080p panel they were a smudge from a sofa, and the
+   labels that would disambiguate them only appear once focus is already
+   inside the rail. */
+.nav-item svg { width: 26px; height: 26px; stroke: currentColor; flex-shrink: 0; }
 .nav-item .label {
-  font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden;
+  font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden;
   opacity: 1; max-width: 160px;
   transition: opacity var(--dur-fast) var(--ease-out), max-width var(--dur-med) var(--ease-out);
 }
 #sidebar.collapsed .nav-item .label { opacity: 0; max-width: 0; }
 .nav-item.current { color: var(--ink-1); }
 .nav-item.current .label { font-weight: 700; }
+/* No box-shadow of its own — the shared .focusable::after ring in theme.css
+   already draws it, and keeping both stacked two accent rings on top of each
+   other at slightly different widths. */
 .nav-item.focused {
   color: var(--ink-1);
   background: var(--bg-panel-hover);
-  box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
 .nav-spacer { flex: 1; }
@@ -75,21 +81,43 @@
      than the two boxes sharing a flush edge (previously separated only by
      the sidebar's 1px hairline border). */
   left: calc(var(--sidebar-w) + var(--sidebar-gap)); right: 0; top: 0; bottom: 0;
-  padding: 56px var(--safe) 40px;
+  /* Deliberately no padding here. Padding on #main never indented its screens:
+     an absolutely positioned child resolves inset:0 against its containing
+     block's *padding box*, so each .screen was laid out over the padding
+     rather than inside it, and content has been sitting flush against the
+     panel edge — with the rightmost card in a five-column grid clipped by the
+     screen edge. The safe area belongs on .screen itself. */
   overflow: hidden;
   transition: left var(--dur-med) var(--ease-out);
 }
 
+/* min-height:0 is load-bearing on both: a flex child's default min-height of
+   auto refuses to shrink below its content, so without it a tall grid would
+   push the screen past the viewport instead of being clipped by its rail. */
+.content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Type scale ----------
+ * Sized for a sofa, not a desk. The previous scale bottomed out at 12-14px,
+ * which is fine at 60cm from a monitor and unreadable at 3m from a 55" panel —
+ * the same angular size as 4pt print in your hand. Broadcast and platform
+ * guidance both put the floor for body text around 18-20px at 1080p, so
+ * nothing here goes below 16px and anything a viewer must actually read sits
+ * at 19px or above. */
 .page-title {
-  font-size: 42px;
+  font-size: 52px;
   font-weight: 800;
-  letter-spacing: -0.5px;
+  letter-spacing: -1px;
   margin: 0 0 6px;
 }
 .page-subtitle {
-  font-size: 20px;
+  font-size: 21px;
   color: var(--ink-2);
-  margin: 0 0 34px;
+  margin: 0 0 30px;
   font-weight: 500;
   display: flex;
   align-items: center;
@@ -112,27 +140,53 @@
 }
 
 /* ---------- Rows / Cards ---------- */
-.row { margin-bottom: 44px; }
+.row { margin-bottom: 34px; }
 .row-header {
   display: flex;
   align-items: baseline;
   gap: 14px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
-.row-title { font-size: 24px; font-weight: 700; }
-.row-count { font-size: 16px; color: var(--ink-3); }
+.row-title { font-size: 27px; font-weight: 700; }
+.row-count { font-size: 17px; color: var(--ink-3); }
 
+/* ---------- Rails ----------
+ * A rail is a viewport that clips, wrapping a track that slides under it via
+ * transform (see BeamRails in app.js). Rows slide horizontally, grids
+ * vertically. Transform rather than scrollLeft/scrollTop because a transform
+ * is a compositor-only change — the TV moves an existing layer instead of
+ * re-rastering the strip on every step of a held-down D-pad. */
+.rail {
+  position: relative;
+  overflow: hidden;
+}
+/* Room for .card.focused's translateY(-6px) lift and its ring to render
+   without the rail's own clip shearing the top off the focused card. */
+.rail-x { padding-top: 10px; margin-top: -10px; }
+.rail-y { flex: 1; min-height: 0; }
+/* Tracks that slide vertically. .card-track carries its own transition (it
+   predates rails); these are the two that needed one adding. */
+.grid-track, .rail-track {
+  transition: transform var(--dur-med) var(--ease-out);
+}
+
+/* No `will-change: transform` here. will-change is meant to be a transient
+   hint applied just before an animation starts, but as a static rule it
+   permanently promotes every row on every screen to its own compositing
+   layer — several always-resident GPU surfaces on a device with a small
+   fixed GPU budget. Chromium already promotes an element for the duration of
+   a transform transition on its own, so the hint bought nothing here and
+   cost a layer per row. */
 .card-track {
   display: flex;
   gap: 22px;
   overflow: visible;
-  will-change: transform;
   transition: transform var(--dur-med) var(--ease-out);
   padding: 6px 4px 26px;
 }
 
 .card {
-  width: 240px;
+  width: 300px;
   flex-shrink: 0;
   border-radius: var(--radius-m);
   overflow: hidden;
@@ -141,8 +195,8 @@
   cursor: pointer;
 }
 .card .thumb {
-  width: 240px;
-  height: 135px;
+  width: 100%;
+  height: 169px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -158,13 +212,19 @@
   position: absolute; inset: 0;
   background: linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.32) 100%);
 }
+/* Opaque fill, no backdrop-filter. A blurred backdrop is per-element and this
+   badge renders once per video card, so a folder of 40 films asked the TV for
+   40 live blur passes — blur being the most expensive operation a compositor
+   has. Whether Tizen's WebKit honours backdrop-filter or silently drops it,
+   this was a bad trade either way: unsupported means it bought nothing,
+   supported means it bought a barely-perceptible frost behind a 30px circle
+   for a large share of the frame budget. */
 .card .thumb .play-badge {
   position: absolute;
   right: 10px; bottom: 10px;
   width: 30px; height: 30px;
   border-radius: 50%;
-  background: rgba(6,7,12,0.6);
-  backdrop-filter: blur(6px);
+  background: rgba(6,7,12,0.82);
   display: flex; align-items: center; justify-content: center;
   z-index: 2;
   opacity: 0;
@@ -177,39 +237,214 @@
   background: rgba(0,0,0,0.35);
 }
 .card .progress > i { display: block; height: 100%; background: var(--accent); }
-.card .meta { padding: 12px 14px 16px; }
+.card .meta { padding: 13px 15px 15px; }
 .card .name {
-  font-size: 16px; font-weight: 600;
+  font-size: 19px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.card .sub { font-size: 13px; color: var(--ink-3); margin-top: 3px; }
+.card .sub {
+  font-size: 16px; color: var(--ink-2); margin-top: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-height: 20px; /* reserves the line so cards with and without metadata
+                       stay the same height and the grid's rows stay level */
+}
 
 .card.folder .thumb .glyph { width: 46px; height: 46px; }
+
+/* Quality badges, top-left of the artwork. Resolution and dynamic range are
+   the only two technical facts worth surfacing at grid scale — they're what a
+   viewer scanning a shelf actually looks for. Everything else BeamMeta parses
+   is held back for the hero, where there's room to read it. */
+.card .badges {
+  position: absolute;
+  left: 9px; top: 9px;
+  display: flex; gap: 5px;
+  z-index: 2;
+}
+.badge {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: rgba(6, 7, 12, 0.78);
+  color: var(--ink-1);
+}
+.badge.hdr { background: linear-gradient(135deg, #d9a53b, #b8791f); color: #14100a; }
 
 .card.focused {
   transform: translateY(-6px) scale(1.03);
   border-color: var(--accent);
 }
 
-/* Grid variant for browse screens */
+/* Grid variant for browse screens.
+   Five columns, not six: at 1920 a six-column grid put cards at 255px, and the
+   filename on a 255px card truncates after roughly two words. Five gives 308px
+   and a legible 19px title, and the row is still wide enough that nothing
+   feels sparse. */
 .grid-track {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 24px 22px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 22px 22px;
+  align-content: start;
 }
 .grid-track .card { width: 100%; }
-.grid-track .card .thumb { width: 100%; }
+
+/* Breadcrumb row: path on the left, drive capacity pushed to the right. Both
+   were previously stacked in their own full-width blocks above the grid. */
+.crumb-bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+  margin-bottom: 20px;
+}
+.crumb-bar .breadcrumb { margin-bottom: 0; }
+.crumb-cap {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 17px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* Progress and truncation notices during a library scan, and the guidance line
+   on an empty Network screen. flex-shrink:0 because .content is a flex column
+   whose rail wants every spare pixel — without it this line gets crushed. */
+.scan-note {
+  font-size: 19px;
+  color: var(--ink-3);
+  padding: 4px 0 22px;
+  max-width: 1000px;
+  line-height: 1.5;
+  flex-shrink: 0;
+}
+.scan-note strong { color: var(--ink-1); font-weight: 700; }
 
 /* Breadcrumb */
 .breadcrumb {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 6px;
   margin-bottom: 24px;
-  font-size: 18px;
+  font-size: 19px;
   color: var(--ink-2);
   flex-wrap: wrap;
 }
-.breadcrumb .seg { color: var(--ink-1); font-weight: 600; }
-.breadcrumb .sep { color: var(--ink-3); }
+/* Real padding and a radius so the focus ring reads as a *button* around the
+   segment. Bare inline text gave the ring nothing to sit on, so it hugged the
+   glyphs and came out looking like a stray text-selection highlight rather
+   than a focused control. */
+.breadcrumb .seg {
+  color: var(--ink-1);
+  font-weight: 600;
+  padding: 7px 13px;
+  border-radius: 9px;
+  background: var(--bg-panel);
+}
+.breadcrumb .seg.focused { background: var(--bg-panel-hover); }
+.breadcrumb .sep { color: var(--ink-3); padding: 0 2px; }
+
+/* ---------- Hero ----------
+ * A large panel at the top of every browse screen showing whatever is focused
+ * right now. This is the answer to the screen being three-quarters empty: the
+ * void wasn't a spacing problem, it was a missing feature. A grid alone gives
+ * a viewer nothing to look at while they decide, so the space above it now
+ * does the deciding — full title, year, quality, and where they left off.
+ *
+ * It also fixes the palette problem. Hashing a filename to a hue and painting
+ * sixty cards with it read as confetti, because sixty arbitrary hues compete.
+ * One large surface tinted at a time reads as identity instead, so the hue
+ * moved here and the cards went neutral.
+ */
+#hero, .hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  height: 316px;
+  flex-shrink: 0;
+  padding: 30px 34px;
+  margin-bottom: 26px;
+  border-radius: var(--radius-l);
+  overflow: hidden;
+  background: var(--bg-panel-solid);
+  border: 1px solid var(--hairline);
+}
+/* The item's tint, as a wash behind the text. Painted on a pseudo-element so
+   updating it per focus change touches one background property on one node,
+   rather than restyling the hero and everything inside it. */
+.hero .hero-wash {
+  position: absolute;
+  inset: 0;
+  transition: background var(--dur-med) linear;
+}
+.hero-body {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.hero-eyebrow {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+.hero-title {
+  font-size: 46px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+  line-height: 1.1;
+  margin-bottom: 12px;
+  /* Two lines then ellipsis: long release names are common and a third line
+     would push the metadata row out of the panel. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.hero-sub {
+  font-size: 20px;
+  color: var(--ink-2);
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+.hero-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+.hero-chips .chip {
+  font-size: 15px;
+  font-weight: 700;
+  padding: 5px 11px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--ink-1);
+}
+.hero-resume { display: flex; align-items: center; gap: 14px; font-size: 18px; color: var(--ink-2); }
+.hero-resume .bar {
+  width: 240px; height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+.hero-resume .bar > i { display: block; height: 100%; background: var(--accent); }
+
+.hero-art {
+  position: relative;
+  width: 434px;
+  height: 244px;
+  flex-shrink: 0;
+  border-radius: var(--radius-m);
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-3);
+}
+.hero-art svg { width: 62px; height: 62px; }
+.hero-art.has-art svg { display: none; }
 
 /* Empty states */
 .empty-state {
@@ -228,8 +463,8 @@
   display: flex; align-items: center; justify-content: center;
 }
 .empty-state .icon-badge svg { width: 32px; height: 32px; stroke: var(--accent); }
-.empty-state h3 { font-size: 26px; margin: 0; }
-.empty-state p { font-size: 17px; color: var(--ink-2); line-height: 1.5; margin: 0; }
+.empty-state h3 { font-size: 30px; margin: 0; }
+.empty-state p { font-size: 19px; color: var(--ink-2); line-height: 1.5; margin: 0; }
 
 /* Buttons */
 .btn {
@@ -238,7 +473,7 @@
   gap: 10px;
   padding: 14px 26px;
   border-radius: 999px;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
   background: var(--bg-panel-solid);
   color: var(--ink-1);
@@ -246,6 +481,53 @@
 }
 .btn.primary { background: linear-gradient(135deg, var(--accent-2), var(--accent)); color: #06070c; border: none; }
 .btn.focused { transform: scale(1.06); }
+/* .content is a flex column, and a column container stretches its children
+   across the cross axis — which made a standalone button (Add Server, Scan
+   Again) span the full screen width despite being display:inline-flex. Scoped
+   to direct children so a .btn used as a settings control, inside a row that
+   centres it, keeps its own alignment. */
+.content > .btn { align-self: flex-start; }
+
+/* ---------- Settings rows ----------
+ * Label and explanation on the left, one control on the right. Every option
+ * carries a sentence saying what it does — on a TV there's no tooltip, no
+ * hover, and no cursor to explore with, so an unexplained control is a control
+ * nobody touches. The "Generate artwork from video" row in particular exists
+ * to be found by someone whose TV feels slow, so it says so plainly. */
+.setting {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  padding: 20px 24px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-m);
+  background: var(--bg-panel);
+  border: 1px solid var(--hairline);
+}
+.setting-text { flex: 1; min-width: 0; }
+.setting-label { font-size: 21px; font-weight: 600; margin-bottom: 5px; }
+.setting-hint { font-size: 17px; color: var(--ink-3); line-height: 1.45; max-width: 780px; }
+.setting-control {
+  flex-shrink: 0;
+  min-width: 148px;
+  justify-content: center;
+  font-size: 18px;
+}
+/* An "On" state has to be legible without colour alone carrying it — the label
+   inside the pill changes to match, so the accent fill is reinforcement. */
+.setting-control.toggle.on {
+  background: linear-gradient(135deg, var(--accent-2), var(--accent));
+  color: #06070c;
+  border-color: transparent;
+}
+
+.about-text {
+  font-size: 19px;
+  color: var(--ink-2);
+  line-height: 1.6;
+  max-width: 860px;
+  margin: 0 0 14px;
+}
 
 /* Toast */
 #toast {
@@ -256,10 +538,14 @@
   border: 1px solid rgba(255,255,255,0.08);
   padding: 16px 26px;
   border-radius: 14px;
-  font-size: 17px;
+  font-size: 20px;
   opacity: 0;
   pointer-events: none;
-  transition: all var(--dur-med) var(--ease-spring);
+  /* Named properties, not `all`. `all` makes the engine watch every animatable
+     property on the element for changes — including ones only ever set once —
+     and this element also carries a large box-shadow that `all` would happily
+     animate if it were ever touched. */
+  transition: opacity var(--dur-med) var(--ease-spring), transform var(--dur-med) var(--ease-spring);
   z-index: 200;
   box-shadow: 0 20px 50px rgba(0,0,0,0.5);
 }
@@ -267,7 +553,7 @@
 
 /* Form (Add network source) */
 .form-field { margin-bottom: 22px; max-width: 640px; }
-.form-field label { display: block; font-size: 15px; color: var(--ink-2); margin-bottom: 8px; font-weight: 600; }
+.form-field label { display: block; font-size: 17px; color: var(--ink-2); margin-bottom: 8px; font-weight: 600; }
 .form-field .input-box {
   display: block;
   width: 100%;
@@ -282,4 +568,4 @@
 }
 .form-field .input-box::placeholder { color: var(--ink-3); }
 .form-field .input-box.focused { border-color: var(--accent); box-shadow: var(--focus-ring); }
-.form-field .hint { font-size: 14px; color: var(--ink-3); margin-top: 8px; }
+.form-field .hint { font-size: 16px; color: var(--ink-3); margin-top: 8px; }
