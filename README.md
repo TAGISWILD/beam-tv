@@ -2,7 +2,7 @@
 
 [![GitHub release](https://img.shields.io/github/v/release/TAGISWILD/beam-tv)](https://github.com/TAGISWILD/beam-tv/releases)
 [![MIT License](https://img.shields.io/github/license/TAGISWILD/beam-tv)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-3%20passing-brightgreen)](beam-server/test/library.test.js)
+[![CI](https://github.com/TAGISWILD/beam-tv/actions/workflows/ci.yml/badge.svg)](https://github.com/TAGISWILD/beam-tv/actions/workflows/ci.yml)
 [![GitHub stars](https://img.shields.io/github/stars/TAGISWILD/beam-tv?style=social)](https://github.com/TAGISWILD/beam-tv/stargazers)
 [![Hacktoberfest](https://img.shields.io/badge/Hacktoberfest-ready-FF7518)](https://github.com/TAGISWILD/beam-tv/issues?q=is%3Aissue+is%3Aopen+label%3Ahacktoberfest)
 
