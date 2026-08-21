@@ -651,6 +651,7 @@
           openPlayer({
             key: 'usb:' + f.subPath.join('/'), title: f.name, uri: f.uri,
             subtitleUri: sub ? sub.uri : undefined, sourceType: f.kind,
+            subtitleCandidates: f.kind === 'video' ? UsbSource.orderSubtitlesFor(f.name, f.subtitles) : [],
             backTo: () => renderHome(),
           });
         }
@@ -764,6 +765,7 @@
           openPlayer({
             key: 'usb:' + ep.subPath.join('/'), title: ep.name, uri: ep.uri,
             subtitleUri: sub ? sub.uri : undefined, sourceType: 'video',
+            subtitleCandidates: UsbSource.orderSubtitlesFor(ep.name, ep.subtitles),
             backTo: () => renderShow(show),
           });
         },
@@ -902,7 +904,12 @@
       openPhotoViewer(imageSiblings, idx, backTo);
     } else {
       const sub = item.kind === 'video' ? UsbSource.findSubtitleFor(item.name, subtitles) : null;
-      openPlayer({ key, title: item.name, uri: item.uri, subtitleUri: sub ? sub.uri : undefined, sourceType: item.kind, backTo });
+      openPlayer({
+        key, title: item.name, uri: item.uri,
+        subtitleUri: sub ? sub.uri : undefined, sourceType: item.kind,
+        subtitleCandidates: item.kind === 'video' ? UsbSource.orderSubtitlesFor(item.name, subtitles) : [],
+        backTo,
+      });
     }
   }
 
@@ -1038,15 +1045,16 @@
     const root = $('#screen-network .content');
     root.innerHTML = `
       <h2 class="page-title" style="font-size:32px;margin-bottom:8px;">Add Network Server</h2>
-      <p class="page-subtitle" style="margin-bottom:30px;">Enter your DLNA/UPnP server’s description URL. Common examples:<br>
-      Plex &mdash; http://SERVER-IP:32469/dlna/;&nbsp; Windows Media Player &mdash; http://SERVER-IP:2869/upnphost/udhisapi.dll?...;&nbsp; Universal Media Server / Serviio &mdash; check the app’s DLNA settings page.</p>
+      <p class="page-subtitle" style="margin-bottom:30px;">Enter your server’s address — the IP and port is enough, Beam finds the rest.<br>
+      For example <strong>192.168.1.10:8200</strong> (a router or NAS running MiniDLNA) or <strong>192.168.1.10:32469</strong> (Plex).
+      If your server shows a full description URL in its settings, pasting that works too.</p>
       <div class="form-field">
         <label>Server name (optional)</label>
         <input class="input-box focusable" id="f-name" type="text" placeholder="Living Room Plex">
       </div>
       <div class="form-field">
-        <label>Description URL</label>
-        <input class="input-box focusable" id="f-url" type="text" placeholder="http://192.168.1.20:32469/dlna/">
+        <label>Server address</label>
+        <input class="input-box focusable" id="f-url" type="text" placeholder="192.168.1.10:8200">
         <div class="hint">Press OK to open the keyboard, Enter again to confirm.</div>
       </div>
       <div class="btn primary focusable" id="f-submit">${icon('plus', 18)} Add Server</div>
@@ -1061,7 +1069,7 @@
   async function submitAddServer() {
     const name = $('#f-name').value.trim();
     const url = $('#f-url').value.trim();
-    if (!url) { toast('Please enter a description URL'); return; }
+    if (!url) { toast('Please enter a server address'); return; }
     toast('Connecting…');
     try {
       const entry = await DlnaSource.addServer(name, url);
@@ -1135,7 +1143,15 @@
     }
     const sidecarSub = item.kind === 'video' ? UsbSource.findSubtitleFor(item.name, subtitleSiblings) : null;
     const subtitleUri = item.embeddedSubtitleUri || (sidecarSub ? sidecarSub.uri : undefined);
-    openPlayer({ key, title: item.name, uri: item.uri, subtitleUri, sourceType: item.kind, backTo: () => renderDlnaDir() });
+    // A subtitle carried on the item's own <res> has no folder entry behind
+    // it, so it's added to the choices by hand or it couldn't be cycled back
+    // to after switching away from it.
+    const candidates = (item.embeddedSubtitleUri ? [{ name: 'Embedded subtitles', uri: item.embeddedSubtitleUri }] : [])
+      .concat(item.kind === 'video' ? UsbSource.orderSubtitlesFor(item.name, subtitleSiblings) : []);
+    openPlayer({
+      key, title: item.name, uri: item.uri, subtitleUri, sourceType: item.kind,
+      subtitleCandidates: candidates, backTo: () => renderDlnaDir(),
+    });
   }
 
   /* ---------------- Settings ----------------
@@ -1344,6 +1360,12 @@
     App.pip = false;
     $('#screen-player').classList.remove('pip');
     App._playerBackTo = source.backTo;
+    // -1 means "no subtitles showing", which is also where a video with no
+    // auto-matched sidecar starts.
+    App._subtitleChoices = source.subtitleCandidates || [];
+    App._subtitleIndex = source.subtitleUri
+      ? App._subtitleChoices.findIndex((c) => c.uri === source.subtitleUri)
+      : -1;
     showScreen('player');
     $('#player-title').textContent = UsbSource.prettyName(source.title);
     const audioArt = $('#player-audio-art');
@@ -1459,6 +1481,39 @@
     handlePlayPausePress();
   });
 
+  // Off -> each subtitle file in the folder -> Off. With a single sidecar
+  // (the common case) this is an ordinary on/off toggle; with several, it is
+  // also the way to pick a different one — including subtitles named by
+  // language rather than after the video, which never auto-match.
+  function cycleSubtitles() {
+    const choices = App._subtitleChoices || [];
+    if (!choices.length) {
+      // Nothing to cycle. A track can still exist here if the source handed
+      // one over without a folder listing behind it.
+      if (App.player.hasSubtitles()) {
+        const mode = App.player.toggleSubtitles();
+        toast(mode === 'showing' ? 'Subtitles on' : 'Subtitles off');
+      } else {
+        toast('No subtitle files found for this video');
+      }
+      return;
+    }
+    const next = App._subtitleIndex + 1 >= choices.length ? -1 : App._subtitleIndex + 1;
+    App._subtitleIndex = next;
+    if (next === -1) {
+      App.player.clearSubtitles();
+      toast('Subtitles off');
+      return;
+    }
+    const choice = choices[next];
+    App.player.loadSubtitle(choice.uri)
+      .then(() => toast(choices.length > 1 ? 'Subtitles: ' + choice.name : 'Subtitles on'))
+      .catch((e) => {
+        App._subtitleIndex = -1;
+        toast('Couldn\u2019t load ' + choice.name + ': ' + (e.message || e));
+      });
+  }
+
   function initPlayerKeys() {
     document.addEventListener('keydown', (e) => {
       if (!window.BeamPlayerActive) return;
@@ -1476,12 +1531,10 @@
       if (e.key === 'ArrowLeft' || e.keyCode === 412) { e.preventDefault(); App.player.seekBy(-10); showPlayerControls(); if (window.BeamSound) window.BeamSound.move(); return; }
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); showPlayerControls(); return; }
       // Blue color key: keyCode 406 on Tizen remotes, 'c'/'C' in the browser
-      // preview — toggles the loaded subtitle track on/off.
+      // preview — steps through the subtitle files sitting next to the video.
       if (e.keyCode === 406 || e.key === 'c' || e.key === 'C') {
         e.preventDefault();
-        if (!App.player.hasSubtitles()) { toast('No subtitles for this file'); return; }
-        const mode = App.player.toggleSubtitles();
-        toast(mode === 'showing' ? 'Subtitles on' : 'Subtitles off');
+        cycleSubtitles();
         return;
       }
     }, true);

@@ -14,20 +14,30 @@
   }
   function saveResumeMap(map) { localStorage.setItem(RESUME_KEY, JSON.stringify(map)); }
 
-  function srtTimeToVtt(t) { return t.replace(',', '.'); }
+  // A cue timing line, in either of the two separators seen in the wild:
+  // SRT's comma (the standard) and the period some tools emit instead.
+  const SRT_TIMING_RE = /^\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[.,]\d{3}/;
+
+  // Both timestamps on the line need converting. A plain string argument to
+  // String.replace() only swaps the FIRST match, which left every cue's END
+  // time as "00:00:04,000" — malformed WebVTT, so the parser dropped the cue
+  // and no subtitles rendered at all.
+  function srtTimeToVtt(t) { return t.replace(/,/g, '.'); }
 
   function srtToVtt(srtText) {
-    const lines = srtText.replace(/\r/g, '').split('\n');
+    const lines = srtText.replace(/^\uFEFF/, '').replace(/\r/g, '').split('\n');
     const out = ['WEBVTT', ''];
-    for (const line of lines) {
-      if (/^\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}/.test(line)) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (SRT_TIMING_RE.test(line)) {
         out.push(srtTimeToVtt(line));
-      } else if (/^\d+$/.test(line.trim())) {
-        // cue index line — WebVTT doesn't require it, skip
         continue;
-      } else {
-        out.push(line);
       }
+      // A bare number is only a cue index when the very next line is that
+      // cue's timing line. Checking that is what keeps a line of dialogue
+      // that happens to be all digits ("1999") from being swallowed.
+      if (/^\d+$/.test(line.trim()) && SRT_TIMING_RE.test(lines[i + 1] || '')) continue;
+      out.push(line);
     }
     return out.join('\n');
   }
@@ -68,12 +78,20 @@
     return out.join('\n');
   }
 
+  // Single entry point for every sidecar format Beam claims to support.
+  // WebVTT passes through untouched; ASS/SSA and SRT are converted.
+  function toVtt(text) {
+    if (/^\s*WEBVTT/i.test(text)) return text;
+    return isAssOrSsa(text) ? assToVtt(text) : srtToVtt(text);
+  }
+
   class Player {
     constructor(videoEl) {
       this.video = videoEl;
       this.current = null; // { key, title, uri }
       this._saveTimer = null;
       this._trackUrl = null;
+      this.subtitleUri = null;
       this.onTimeUpdate = null;
       this.onEnded = null;
       this.onError = null;
@@ -150,28 +168,48 @@
       this._saveTimer = setInterval(() => this._saveProgress(), SAVE_INTERVAL_MS);
 
       if (subtitleUri) {
-        try {
-          const text = await (await fetch(subtitleUri)).text();
-          const vtt = /^\s*WEBVTT/i.test(text) ? text : isAssOrSsa(text) ? assToVtt(text) : srtToVtt(text);
-          const blob = new Blob([vtt], { type: 'text/vtt' });
-          this._trackUrl = URL.createObjectURL(blob);
-          const track = document.createElement('track');
-          track.kind = 'subtitles';
-          track.label = 'Subtitles';
-          track.default = true;
-          track.src = this._trackUrl;
-          // `default` alone is not reliably honored by every WebKit build
-          // (some Tizen firmwares need `.track.mode` set explicitly, and only
-          // after the track has actually loaded its cues) — so it's forced
-          // on both immediately and again on 'load' to cover either case.
-          track.track.mode = 'showing';
-          track.addEventListener('load', () => { track.track.mode = 'showing'; });
-          this.video.appendChild(track);
-        } catch (e) { console.warn('subtitle load failed', e); }
+        try { await this.loadSubtitle(subtitleUri); }
+        catch (e) { console.warn('subtitle load failed', e); }
       }
 
       await playAttempt;
       return resumeAt;
+    }
+
+    // Fetches a sidecar file, converts whatever format it turns out to be, and
+    // attaches it as the video's one subtitle track. Safe to call mid-playback:
+    // any previously attached track is torn down first, which is what makes
+    // switching between subtitle files possible without reopening the video.
+    async loadSubtitle(subtitleUri) {
+      const text = await (await fetch(subtitleUri)).text();
+      const vtt = toVtt(text);
+      this.clearSubtitles();
+      const blob = new Blob([vtt], { type: 'text/vtt' });
+      this._trackUrl = URL.createObjectURL(blob);
+      const track = document.createElement('track');
+      track.kind = 'subtitles';
+      track.label = 'Subtitles';
+      track.default = true;
+      track.src = this._trackUrl;
+      this.video.appendChild(track);
+      // `default` alone is not reliably honored by every WebKit build (some
+      // Tizen firmwares need `.track.mode` set explicitly, and only after the
+      // track has actually loaded its cues) — so it's forced on both now and
+      // again on 'load' to cover either case. Setting it only after the
+      // element is in the DOM, since a detached <track> has no usable
+      // TextTrack to set a mode on.
+      if (track.track) track.track.mode = 'showing';
+      track.addEventListener('load', () => { if (track.track) track.track.mode = 'showing'; });
+      this.subtitleUri = subtitleUri;
+      return subtitleUri;
+    }
+
+    // Detaches the current subtitle track entirely — distinct from hiding it,
+    // which leaves the cues loaded and hasSubtitles() answering true.
+    clearSubtitles() {
+      Array.from(this.video.querySelectorAll('track')).forEach((t) => t.remove());
+      if (this._trackUrl) { URL.revokeObjectURL(this._trackUrl); this._trackUrl = null; }
+      this.subtitleUri = null;
     }
 
     close() {
@@ -179,8 +217,7 @@
       if (this.current) this._saveProgress();
       this.video.pause();
       this.video.removeAttribute('src');
-      Array.from(this.video.querySelectorAll('track')).forEach((t) => t.remove());
-      if (this._trackUrl) { URL.revokeObjectURL(this._trackUrl); this._trackUrl = null; }
+      this.clearSubtitles();
       this.video.load();
       this.current = null;
     }
@@ -201,5 +238,11 @@
     }
   }
 
+  // Exported so the conversion logic can be unit-tested with `node --test`,
+  // the same way js/metadata.js is.
+  const BeamSubtitles = { srtToVtt, assToVtt, isAssOrSsa, toVtt };
+
   global.BeamPlayer = Player;
-})(window);
+  global.BeamSubtitles = BeamSubtitles;
+  if (typeof module !== 'undefined' && module.exports) module.exports = { Player, BeamSubtitles };
+})(typeof window !== 'undefined' ? window : globalThis);
