@@ -69,7 +69,22 @@
     return english || candidates[0];
   }
 
-  const UsbSource = { extOf, kindOf, humanSize, prettyName, findSubtitleFor, normalizeUri };
+  // Every subtitle file in the folder, most relevant first. findSubtitleFor
+  // picks the one to load automatically; this is the list the player cycles
+  // through when that guess wasn't the file you wanted — or matched nothing,
+  // which is what happens whenever subtitles are named by language
+  // ("English.srt") rather than after the video.
+  function orderSubtitlesFor(videoName, subtitleItems) {
+    if (!subtitleItems || !subtitleItems.length) return [];
+    const best = findSubtitleFor(videoName, subtitleItems);
+    const base = baseNameOf(videoName);
+    const isRelated = (s) => s !== best && baseNameOf(s.name).startsWith(base);
+    return (best ? [best] : [])
+      .concat(subtitleItems.filter(isRelated))
+      .concat(subtitleItems.filter((s) => s !== best && !isRelated(s)));
+  }
+
+  const UsbSource = { extOf, kindOf, humanSize, prettyName, findSubtitleFor, orderSubtitlesFor, normalizeUri };
 
   // Returns ALL storages tizen.filesystem reports (not just external/mounted).
   // Filtering happens in the caller so the UI can show raw diagnostics when
@@ -169,4 +184,5 @@
   };
 
   global.UsbSource = UsbSource;
-})(window);
+  if (typeof module !== 'undefined' && module.exports) module.exports = UsbSource;
+})(typeof window !== 'undefined' ? window : globalThis);

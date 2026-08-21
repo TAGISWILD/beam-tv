@@ -92,6 +92,20 @@
       if (this.current) this.current.classList.remove('focused');
       this.current = el;
       el.classList.add('focused');
+      // Samsung's Voice Guide, like every screen reader, follows real DOM
+      // focus. Moving only a CSS class left it with nothing to announce, so
+      // D-pad navigation was completely silent to it. Focusables are kept out
+      // of the tab order — the D-pad drives everything — so tabindex="-1" is
+      // all that's needed to make them focusable programmatically.
+      if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+      try {
+        // preventScroll matters: the rails position content with transforms,
+        // and letting focus() scroll would fight onReveal below.
+        el.focus({ preventScroll: true });
+      } catch (e) {
+        // Older WebKit builds don't accept the options argument.
+        try { el.focus(); } catch (e2) { /* element can't take focus */ }
+      }
       // Bringing focus into view is delegated rather than done with
       // scrollIntoView. The app moves its rows and grids with transforms on a
       // rail (see BeamRails in app.js) because a transform is compositable and

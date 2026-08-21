@@ -26,6 +26,34 @@ function localIp() {
   return '127.0.0.1';
 }
 
+// Node reports family as the string 'IPv6' on most releases and the number 6
+// on some, so both are accepted rather than trusting either.
+function isIpv6(iface) {
+  return iface.family === 'IPv6' || iface.family === 6;
+}
+
+// The TV can't discover an IPv6 server the way it discovers an IPv4 one: the
+// unicast sweep in js/dlnaSource.js walks 254 addresses, and the IPv6
+// equivalent is 2^64 per subnet. So the address is shown in the GUI for the
+// user to type instead — which only helps if it's an address that means
+// something on another device. A link-local fe80:: address doesn't: it needs a
+// zone index ("fe80::1%en0") naming an interface on the machine using it.
+function pickIpv6(ifaces) {
+  for (const name of Object.keys(ifaces || {})) {
+    for (const iface of ifaces[name] || []) {
+      if (!isIpv6(iface) || iface.internal) continue;
+      if (/^fe80:/i.test(iface.address)) continue;
+      if (iface.scopeid) continue;
+      return iface.address;
+    }
+  }
+  return null;
+}
+
+function localIpv6() {
+  return pickIpv6(os.networkInterfaces());
+}
+
 function buildDidl(containers, items, baseUrl) {
   const parts = [
     '<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" ' +
@@ -146,4 +174,4 @@ function createServer({ library, getSettings }) {
   return app;
 }
 
-module.exports = { createServer, localIp };
+module.exports = { createServer, localIp, localIpv6, pickIpv6 };

@@ -3,7 +3,7 @@ const path = require('path');
 const http = require('http');
 const store = require('./store');
 const { Library } = require('./library');
-const { createServer, localIp } = require('./server');
+const { createServer, localIp, localIpv6 } = require('./server');
 
 let mainWindow = null;
 let tray = null;
@@ -18,6 +18,7 @@ function status(extra) {
     port: settings.port,
     friendlyName: settings.friendlyName,
     localIp: localIp(),
+    localIpv6: localIpv6(),
     folders: settings.folders,
     ...extra,
   };

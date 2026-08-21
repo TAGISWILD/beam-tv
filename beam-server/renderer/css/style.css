@@ -97,6 +97,13 @@ main {
   font-variant-numeric: tabular-nums;
   margin-top: 2px;
 }
+/* An IPv6 address is long enough to push the Start/Stop button off a narrow
+   window, so it wraps onto its own line and is allowed to break. */
+#status-address .addr-alt {
+  margin-top: 1px;
+  opacity: 0.75;
+  overflow-wrap: anywhere;
+}
 
 .btn {
   appearance: none;
