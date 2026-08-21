@@ -159,6 +159,15 @@
     // Some server UIs display their address with a upnp:// prefix, which is
     // not a fetchable scheme — strip it and keep whatever followed.
     raw = raw.replace(/^upnp:\/\//i, '');
+    // A bare IPv6 literal has to be bracketed before it's a legal URL host.
+    // Unbracketed means no port by definition (RFC 3986/3987), so every colon
+    // in there belongs to the address itself.
+    if (!/^https?:\/\//i.test(raw) && raw.indexOf('[') === -1 && (raw.match(/:/g) || []).length >= 2) {
+      const slash = raw.indexOf('/');
+      const addr = slash === -1 ? raw : raw.slice(0, slash);
+      const path = slash === -1 ? '' : raw.slice(slash);
+      raw = '[' + addr + ']' + path;
+    }
     if (!/^https?:\/\//i.test(raw)) raw = 'http://' + raw.replace(/^\/+/, '');
     try {
       const u = new URL(raw);

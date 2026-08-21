@@ -71,8 +71,28 @@
     toast._t = setTimeout(() => el.classList.remove('show'), ms || 2600);
   }
 
+  // Applied once per render rather than at every element-creation site:
+  // focusables are built in a dozen places (several of them inside template
+  // strings), and since the D-pad treats them all identically, their
+  // semantics should be applied identically too.
+  function applyA11ySemantics(root) {
+    $all('.focusable', root).forEach((el) => {
+      if (el.tagName === 'INPUT') return;
+      if (!el.hasAttribute('role')) el.setAttribute('role', 'button');
+      if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+    });
+  }
+
   function showScreen(id) {
-    $all('.screen').forEach((s) => s.classList.toggle('active', s.id === 'screen-' + id));
+    $all('.screen').forEach((s) => {
+      const active = s.id === 'screen-' + id;
+      s.classList.toggle('active', active);
+      // Inactive screens keep their content in the DOM, so without this a
+      // screen reader can wander into whatever was rendered on a screen the
+      // viewer has already left.
+      s.setAttribute('aria-hidden', active ? 'false' : 'true');
+    });
+    applyA11ySemantics($('#screen-' + id) || document);
     if (id !== 'player' && id !== 'photo') App._lastNonPlayerScreen = id;
     App.activeScreen = id;
     window.BeamPlayerActive = id === 'player' || id === 'photo';
@@ -295,6 +315,12 @@
         <div class="name">${escapeHtml(title)}</div>
         <div class="sub">${escapeHtml(sub || '')}</div>
       </div>`;
+    // Without this a screen reader reads the title and the subtitle as two
+    // separate runs of text with the decorative glyph between them; the label
+    // makes each card announce as a single sentence.
+    el.setAttribute('role', 'button');
+    el.setAttribute('tabindex', '-1');
+    el.setAttribute('aria-label', [title, sub, isDir ? 'folder' : ''].filter(Boolean).join(', '));
     el._hero = d.hero || null;
     el.addEventListener('nav-select', onSelect);
     el.addEventListener('click', onSelect);
@@ -466,6 +492,10 @@
       const el = document.createElement('div');
       el.className = 'nav-item focusable' + (it.id === 'home' ? ' current' : '');
       el.dataset.target = it.id;
+      el.setAttribute('role', 'link');
+      el.setAttribute('tabindex', '-1');
+      el.setAttribute('aria-label', it.label);
+      if (it.id === 'home') el.setAttribute('aria-current', 'page');
       el.innerHTML = `${icon(it.icon, 26)}<span class="label">${it.label}</span>`;
       el.addEventListener('nav-select', () => navigateTo(it.id));
       el.addEventListener('click', () => navigateTo(it.id));
@@ -474,7 +504,12 @@
   }
 
   function setActiveNav(id) {
-    $all('.nav-item').forEach((el) => el.classList.toggle('current', el.dataset.target === id));
+    $all('.nav-item').forEach((el) => {
+      const current = el.dataset.target === id;
+      el.classList.toggle('current', current);
+      if (current) el.setAttribute('aria-current', 'page');
+      else el.removeAttribute('aria-current');
+    });
   }
 
   function navigateTo(id) {
@@ -948,7 +983,7 @@
     // pushed to the very bottom of the screen — far from the cards it's
     // explaining, and separated from them by a field of empty space.
     if (!servers.length) {
-      root.appendChild(htmlToEl('<div class="scan-note">Choose <strong>Scan Network</strong> to find a Beam Companion Server automatically, or add any DLNA server manually by its description.xml URL.</div>'));
+      root.appendChild(htmlToEl('<div class="scan-note">Choose <strong>Scan Network</strong> to find servers on this network automatically, or add one manually by typing its address.</div>'));
     }
 
     const grid = document.createElement('div');
@@ -966,8 +1001,8 @@
       onSelect: renderNetworkScan,
     }));
     grid.appendChild(actionCard({
-      title: 'Add Manually', sub: 'By description URL', glyph: 'plus',
-      heroSub: 'Enter a DLNA server’s description.xml address yourself',
+      title: 'Add Manually', sub: 'By IP address', glyph: 'plus',
+      heroSub: 'Type a server’s address, like 192.168.1.10:8200',
       onSelect: renderAddServerForm,
     }));
     root.appendChild(railEl('y', grid));
@@ -1545,8 +1580,14 @@
     App.player = new BeamPlayer(v);
     App.player.onTimeUpdate = (video) => {
       const bar = $('#player-progress-fill');
-      if (video.duration) bar.style.width = (video.currentTime / video.duration * 100) + '%';
+      const pct = video.duration ? video.currentTime / video.duration * 100 : 0;
+      if (video.duration) bar.style.width = pct + '%';
       $('#player-time').textContent = formatTime(video.currentTime) + ' / ' + formatTime(video.duration);
+      const track = $('#player-progress');
+      track.setAttribute('aria-valuenow', String(Math.round(pct)));
+      // A percentage read aloud is far less use than the actual position, and
+      // valuetext is what a screen reader prefers when it's present.
+      track.setAttribute('aria-valuetext', formatTime(video.currentTime) + ' of ' + formatTime(video.duration));
     };
     App.player.onEnded = () => closePlayer();
     App.player.onError = (err) => {

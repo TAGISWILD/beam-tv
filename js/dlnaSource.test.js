@@ -76,3 +76,34 @@ test('every address form a user might type resolves to the same candidate set', 
   assert.equal(new Set(sets).size, 1, 'all three forms should behave identically');
   assert.ok(sets[0].includes('/rootDesc.xml'));
 });
+
+// ---- IPv6 (issue #5) -------------------------------------------------------
+// A /64 holds 2^64 addresses, so the unicast sweep scanNetwork() does over an
+// IPv4 /24 has no IPv6 equivalent — typing the address is the only route, and
+// these are the forms a server's settings page actually shows.
+
+test('brackets a bare IPv6 literal so it forms a legal URL host', () => {
+  assert.equal(normalizeServerUrl('2001:db8::1'), 'http://[2001:db8::1]/');
+});
+
+test('accepts an already-bracketed IPv6 address with a port', () => {
+  assert.equal(normalizeServerUrl('[2001:db8::1]:8200'), 'http://[2001:db8::1]:8200/');
+});
+
+test('accepts a full IPv6 description URL', () => {
+  const u = normalizeServerUrl('http://[2001:db8::1]:8200/rootDesc.xml');
+  assert.equal(u, 'http://[2001:db8::1]:8200/rootDesc.xml');
+});
+
+test('keeps the path when bracketing a bare IPv6 literal', () => {
+  assert.equal(normalizeServerUrl('2001:db8::1/rootDesc.xml'), 'http://[2001:db8::1]/rootDesc.xml');
+});
+
+test('tries the default DLNA port for a portless IPv6 address', () => {
+  const urls = candidates(normalizeServerUrl('2001:db8::1'));
+  assert.ok(urls.includes('http://[2001:db8::1]:8200/rootDesc.xml'));
+});
+
+test('does not mistake an IPv4 host:port for an IPv6 literal', () => {
+  assert.equal(normalizeServerUrl('192.168.1.1:8200'), 'http://192.168.1.1:8200/');
+});

@@ -28,9 +28,17 @@
   function render(status) {
     statusDot.classList.toggle('running', status.running);
     statusHeadline.textContent = status.running ? 'Running' : 'Stopped';
-    statusAddress.textContent = status.running
-      ? `${status.localIp}:${status.port}`
-      : 'Your files aren’t reachable while stopped.';
+    if (!status.running) {
+      statusAddress.textContent = 'Your files aren’t reachable while stopped.';
+    } else {
+      // The IPv6 address is shown only when there is a routable one. The TV
+      // can't sweep an IPv6 network to find this server, so on an IPv6-only
+      // LAN typing this address is the way in.
+      statusAddress.innerHTML = escapeHtml(`${status.localIp}:${status.port}`)
+        + (status.localIpv6
+          ? `<div class="addr-alt">IPv6: ${escapeHtml(`[${status.localIpv6}]:${status.port}`)}</div>`
+          : '');
+    }
     toggleBtn.textContent = status.running ? 'Stop' : 'Start';
     toggleBtn.classList.toggle('danger-hover', status.running);
 

@@ -23,7 +23,7 @@
       <div class="splash-word">BEAM</div>
     </div>
 
-    <nav id="sidebar" class="collapsed">
+    <nav id="sidebar" class="collapsed" aria-label="Sections">
       <div class="brand"></div>
       <div class="nav-spacer"></div>
     </nav>
@@ -60,7 +60,7 @@
          sidebar's width remained even when the sidebar itself was hidden,
          since nothing ever changed #main's own box. -->
     <section id="screen-player" class="screen">
-      <video id="player-video" playsinline></video>
+      <video id="player-video" playsinline aria-label="Video player"></video>
       <div id="player-audio-art" class="hidden">
         <div id="player-audio-glyph">
           <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
@@ -75,10 +75,10 @@
             <svg class="i-play" viewBox="0 0 24 24" width="30" height="30" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
             <svg class="i-pause" viewBox="0 0 24 24" width="30" height="30" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
           </div>
-          <div id="player-progress"><div id="player-progress-fill"></div></div>
+          <div id="player-progress" role="progressbar" aria-label="Playback position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="player-progress-fill"></div></div>
           <div id="player-time">0:00 / 0:00</div>
         </div>
-        <div id="player-hint">◀ ▶ seek 10s &nbsp;·&nbsp; OK play/pause &nbsp;·&nbsp; double-press for picture-in-picture &nbsp;·&nbsp; Blue toggle subtitles &nbsp;·&nbsp; Back exit</div>
+        <div id="player-hint">◀ ▶ seek 10s &nbsp;·&nbsp; OK play/pause &nbsp;·&nbsp; double-press for picture-in-picture &nbsp;·&nbsp; Blue subtitles &nbsp;·&nbsp; Back exit</div>
       </div>
       <div id="pip-badge">▶ Double-press play/pause to expand</div>
     </section>
@@ -94,7 +94,10 @@
       <div id="photo-hint">◀ ▶ next / previous &nbsp;·&nbsp; Back exit</div>
     </section>
 
-    <div id="toast"></div>
+    <!-- Announcements are the only feedback for several actions (subtitle
+         switches, scan results, playback errors), so this is a live region
+         rather than a purely visual toast. -->
+    <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
   </div>
 
   <script src="js/env.js"></script>
